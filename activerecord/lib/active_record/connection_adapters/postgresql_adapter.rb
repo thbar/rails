@@ -575,7 +575,7 @@ module ActiveRecord
 
         @type_map = OID::TypeMap.new
         initialize_type_map(type_map)
-        @local_tz = execute('SHOW TIME ZONE', 'SCHEMA').first["TimeZone"]
+        @local_tz = @connection.parameter_status('TimeZone')
         @use_insert_returning = @config.key?(:insert_returning) ? self.class.type_cast_config_to_boolean(@config[:insert_returning]) : true
       end
 
@@ -631,10 +631,20 @@ module ActiveRecord
 
       # Enable standard-conforming strings if available.
       def set_standard_conforming_strings
-        old, self.client_min_messages = client_min_messages, 'panic'
-        execute('SET standard_conforming_strings = on', 'SCHEMA') rescue nil
-      ensure
-        self.client_min_messages = old
+        return if @connection.parameter_status('standard_conforming_strings') == 'on'
+        begin
+          old, self.client_min_messages = client_min_messages, 'panic'
+          execute('SET standard_conforming_strings = on', 'SCHEMA') rescue nil
+        ensure
+          self.client_min_messages = old
+        end
+      end
+
+      def set_time_zone(tz)
+        return if @connection.parameter_status('TimeZone') == tz
+
+        # SET TIME ZONE does not use an equals sign like other SET variables
+        execute("SET time zone '#{tz}'", 'SCHEMA')
       end
 
       def supports_insert_with_returning?
@@ -922,7 +932,9 @@ module ActiveRecord
         # This is called by #connect and should not be called manually.
         def configure_connection
           if @config[:encoding]
-            @connection.set_client_encoding(@config[:encoding])
+            if @connection.parameter_status('client_encoding') != @config[:encoding]
+              @connection.set_client_encoding(@config[:encoding])
+            end
           end
           self.client_min_messages = @config[:min_messages] || 'warning'
           self.schema_search_path = @config[:schema_search_path] || @config[:schema_order]
@@ -932,11 +944,10 @@ module ActiveRecord
 
           # If using Active Record's time zone support configure the connection to return
           # TIMESTAMP WITH ZONE types in UTC.
-          # (SET TIME ZONE does not use an equals sign like other SET variables)
           if ActiveRecord::Base.default_timezone == :utc
-            execute("SET time zone 'UTC'", 'SCHEMA')
+            set_time_zone('UTC')
           elsif @local_tz
-            execute("SET time zone '#{@local_tz}'", 'SCHEMA')
+            set_time_zone(@local_tz)
           end
 
           # SET statements from :variables config hash
