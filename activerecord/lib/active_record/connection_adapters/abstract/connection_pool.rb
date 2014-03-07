@@ -54,7 +54,11 @@ module ActiveRecord
     # There are several connection-pooling-related options that you can add to
     # your database connection configuration:
     #
-    # * +pool+: number indicating size of connection pool (default 5)
+    # * +pool+: number indicating maximum size of connection pool (default 5)
+    # * +pool_min+: minimum number of connections that should be maintained in
+    #   the pool (default 3)
+    # * +pool_spare+: number of unused connections that should be maintained
+    #   (default 1)
     # * +checkout_timeout+: number of seconds to block and wait for a connection
     #   before giving up and raising a timeout error (default 5 seconds).
     # * +reaping_frequency+: frequency in seconds to periodically run the
@@ -221,7 +225,7 @@ module ActiveRecord
       include MonitorMixin
 
       attr_accessor :automatic_reconnect, :checkout_timeout
-      attr_reader :spec, :connections, :size, :reaper
+      attr_reader :spec, :connections, :size, :min_size, :spare_count, :reaper
 
       # Creates a new ConnectionPool object. +spec+ is a ConnectionSpecification
       # object which describes database connection information (e.g. adapter,
@@ -240,6 +244,8 @@ module ActiveRecord
 
         # default max pool size to 5
         @size = (spec.config[:pool] && spec.config[:pool].to_i) || 5
+        @min_size = (spec.config[:pool_min] && spec.config[:pool_min].to_i) || 3
+        @spare_count = (spec.config[:pool_spare] && spec.config[:pool_spare].to_i) || 1
 
         # The cache of reserved connections mapped to threads
         @reserved_connections = ThreadSafe::Cache.new(:initial_capacity => @size)
@@ -383,10 +389,15 @@ module ActiveRecord
         end
       end
 
+      def reap
+        reap_stale_connections
+        reap_excess_connections
+      end
+
       # Recover lost connections for the pool.  A lost connection can occur if
       # a programmer forgets to checkin a connection at the end of a thread
       # or a thread dies unexpectedly.
-      def reap
+      def reap_stale_connections
         stale_connections = synchronize do
           @connections.select do |conn|
             conn.in_use? && !conn.owner.alive?
@@ -401,6 +412,21 @@ module ActiveRecord
             else
               remove conn
             end
+          end
+        end
+      end
+
+      # Discard excess connections from the pool.  After a busy period, the
+      # pool may contain more unused connections than is sensible to retain.
+      def reap_excess_connections
+        synchronize do
+          goal = @connections.count(&:in_use?) + @spare_count
+          goal = @min_size if goal < @min_size
+
+          while @connections.size > goal
+            conn = @available.poll or break
+            remove conn
+            conn.disconnect!
           end
         end
       end
