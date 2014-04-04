@@ -430,7 +430,8 @@ module Rails
     # Check <tt>Rails::Railtie.console</tt> for more info.
     def load_console(app=self)
       require "pp"
-      require "psych/y"
+      require "rails/console/y"
+
       require "rails/console/app"
       require "rails/console/helpers"
       run_console_blocks(app)
