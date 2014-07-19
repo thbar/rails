@@ -1,3 +1,7 @@
+*   Fixed a bug in Inflector#underscore where acroynms are incorrectly parsed as camelCases.
+
+    *Fred Wu*
+
 *   Add `String#truncate_words` to truncate a string by a number of words.
 
     *Mohamed Osama*
