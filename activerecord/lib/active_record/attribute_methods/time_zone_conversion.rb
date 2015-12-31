@@ -59,13 +59,7 @@ module ActiveRecord
           subclass.class_eval do
             matcher = ->(name, type) { create_time_zone_conversion_attribute?(name, type) }
             decorate_matching_attribute_types(matcher, :_time_zone_conversion) do |type|
-              if type.respond_to?(:subtype)
-                type.dup.tap do |wrapper_type|
-                  wrapper_type.subtype = TimeZoneConverter.new(wrapper_type.subtype)
-                end
-              else
-                TimeZoneConverter.new(type)
-              end
+              TimeZoneConverter.new(type)
             end
           end
           super
@@ -94,10 +88,6 @@ module ActiveRecord
 
                   config.active_record.time_zone_aware_types << :time
             MESSAGE
-          end
-
-          if cast_type.respond_to?(:subtype)
-            result ||= create_time_zone_conversion_attribute?(name, cast_type.subtype)
           end
 
           result

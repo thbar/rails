@@ -8,6 +8,28 @@ module ActiveRecord
     end
 
     module ClassMethods # :nodoc:
+      def inherited(subclass)
+        # We need to apply this decorator here, rather than on module inclusion. The closure
+        # created by the matcher would otherwise evaluate for `ActiveRecord::Base`, not the
+        # sub class being decorated. As such, changes to `attribute_type_decorations` would
+        # not be picked up.
+        subclass.class_eval do
+          matcher = ->(name, type) { type.respond_to?(:subtype=) }
+          decorate_matching_attribute_types(matcher, :_subtype_decoration) do |type|
+            # FIXME: name
+            new_subtype = attribute_type_decorations.apply('name_goes_here', type.subtype)
+            if type.subtype != new_subtype
+              type.dup.tap do |wrapper_type|
+                wrapper_type.subtype = new_subtype
+              end
+            else
+              type
+            end
+          end
+        end
+        super
+      end
+
       def decorate_attribute_type(column_name, decorator_name, &block)
         matcher = ->(name, _) { name == column_name.to_s }
         key = "_#{column_name}_#{decorator_name}"
