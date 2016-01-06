@@ -412,6 +412,13 @@ module ActionDispatch # :nodoc:
     end
 
     def before_sending
+      # we should do all the before_committed stuff here; if we're
+      # sending before we've committed, it's because the action is
+      # reading back the response body. That's likely to make a mess,
+      # but our least damaging option is to do the commit: after we
+      # freeze the headers, it'll be impossible.
+      commit!
+
       headers.freeze
       request.commit_cookie_jar! unless committed?
     end
