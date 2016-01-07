@@ -29,6 +29,22 @@ module ActionCable
           Pathname.new(channel_path).basename.to_s.split('.').first.camelize
         end
       end
+
+      ADAPTER = ActionCable::StorageAdapter
+
+      # Returns constant of storage adapter specified in config/cable.yml
+      # If the adapter cannot be found, this will default to the Redis adapter
+      def storage_adapter
+        # "ActionCable::StorageAdapter::#{adapter.capitalize}"
+        adapter = config_opts['adapter']
+        adapter_const = "ActionCable::StorageAdapter::#{adapter.capitalize}"
+
+        if Object.const_defined?(adapter_const)
+          adapter_const.constantize
+        else
+          ADAPTER_BASE::Redis
+        end
+      end
     end
   end
 end
