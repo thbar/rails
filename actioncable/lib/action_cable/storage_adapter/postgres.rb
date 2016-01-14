@@ -5,6 +5,21 @@ module ActionCable
     class Postgres < Base
       # The storage instance used for broadcasting. Not intended for direct user use.
       def broadcast(channel, payload)
+        with_connection do |pg_conn|
+          pg_conn.exec("NOTIFY #{channel}, '#{payload}'")
+        end
+      end
+
+      def subscribe(channel, message_callback, success_callback = nil)
+        listener.subscribe_to(channel, message_callback, success_callback)
+      end
+
+      def unsubscribe(channel, message_callback)
+        listener.unsubscribe_to(channel, message_callback)
+      end
+
+
+      def with_connection # :nodoc:
         ActiveRecord::Base.connection_pool.with_connection do |ar_conn|
           pg_conn = ar_conn.raw_connection
 
@@ -12,26 +27,20 @@ module ActionCable
             raise 'ActiveRecord database must be Postgres in order to use the Postgres ActionCable storage adapter'
           end
 
-          pg_conn.exec("NOTIFY #{channel}, '#{payload}'")
+          yield pg_conn
         end
       end
 
-      def subscribe(channel, callback, success_callback = nil)
-        Listener.instance.subscribe_to(channel, callback, success_callback)
-        # Needed for channel/streams.rb#L79
-        ::EM::DefaultDeferrable.new
-      end
+      private
 
-      def unsubscribe(channel, callback)
-        Listener.instance.unsubscribe_to(channel, callback)
+      def listener
+        @listener ||= Listener.new(self)
       end
 
       class Listener
-        include Singleton
+        def initialize(adapter)
+          @adapter = adapter
 
-        attr_accessor :subscribers
-
-        def initialize
           @subscribers = Hash.new {|h,k| h[k] = [] }
           @sync = Mutex.new
           @queue = Queue.new
@@ -43,8 +52,7 @@ module ActionCable
         end
 
         def listen
-          ActiveRecord::Base.connection_pool.with_connection do |ar_conn|
-            pg_conn = ar_conn.raw_connection
+          adapter.with_connection do |pg_conn|
 
             loop do
               until @queue.empty?
