@@ -4,16 +4,26 @@ require 'redis'
 module ActionCable
   module StorageAdapter
     class Redis < Base
-      # The redis instance used for broadcasting. Not intended for direct user use.
-      def broadcast
-        @broadcast ||= ::Redis.new(@server.config.config_opts)
+      def broadcast(channel, payload)
+        _broadcast.publish(channel, payload)
       end
 
-      def pubsub
-        redis.pubsub
+      def subscribe(channel, message_callback, success_callback = nil)
+        redis.pubsub.subscribe(channel, &message_callback).tap do |result|
+          result.callback(&success_callback) if success_callback
+        end
+      end
+
+      def unsubscribe(channel, message_callback)
+        redis.pubsub.unsubscribe_proc(channel, message_callback)
       end
 
       private
+
+      # The redis instance used for broadcasting. Not intended for direct user use.
+      def _broadcast
+        @broadcast ||= ::Redis.new(@server.config.config_opts)
+      end
 
       # The EventMachine Redis instance used by the pubsub adapter.
       def redis
