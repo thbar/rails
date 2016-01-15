@@ -17,7 +17,7 @@ module ActionCable
 
       def unsubscribe(channel, callback, success_callback = nil)
         if hi_redis_conn.pubsub.unsubscribe_proc(channel, callback)
-          success_callback.call
+          success_callback.call if success_callback
         end
       end
 
