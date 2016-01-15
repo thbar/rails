@@ -39,7 +39,7 @@ module ActionCable
 
           def broadcast(message)
             server.logger.info "[ActionCable] Broadcasting to #{broadcasting}: #{message}"
-            adapter.broadcast broadcasting, ActiveSupport::JSON.encode(message)
+            server.adapter.broadcast broadcasting, ActiveSupport::JSON.encode(message)
           end
         end
     end

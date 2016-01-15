@@ -3,6 +3,7 @@ require 'thread'
 module ActionCable
   module StorageAdapter
     class Postgres < Base
+      # The storage instance used for broadcasting. Not intended for direct user use.
       def broadcast(channel, payload)
         ActiveRecord::Base.connection_pool.with_connection do |ar_conn|
           pg_conn = ar_conn.raw_connection
@@ -15,12 +16,14 @@ module ActionCable
         end
       end
 
-      def subscribe(channel, message_callback, success_callback = nil)
-        Listener.instance.subscribe_to(channel, message_callback, success_callback)
+      def subscribe(channel, callback, success_callback = nil)
+        Listener.instance.subscribe_to(channel, callback, success_callback)
+        # Needed for channel/streams.rb#L79
+        ::EM::DefaultDeferrable.new
       end
 
-      def unsubscribe(channel, message_callback)
-        Listener.instance.unsubscribe_to(channel, message_callback)
+      def unsubscribe(channel, callback)
+        Listener.instance.unsubscribe_to(channel, callback)
       end
 
       class Listener
@@ -48,10 +51,7 @@ module ActionCable
                 value = @queue.pop(true)
                 if value.first == :listen
                   pg_conn.exec("LISTEN #{value[1]}")
-
-                  if value[2]
-                    ::EM.next_tick(&value[2])
-                  end
+                 ::EM.next_tick(&value[2]) if value[2]
                 elsif value.first == :unlisten
                   pg_conn.exec("UNLISTEN #{value[1]}")
                 end
