@@ -10,16 +10,17 @@ module ActionCable
         end
       end
 
-      def subscribe(channel, message_callback, success_callback = nil)
-        listener.subscribe_to(channel, message_callback, success_callback)
+      def subscribe(channel, callback, success_callback = nil)
+        listener.subscribe_to(channel, callback, success_callback)
+        # Needed for channel/streams.rb#L79
+        ::EM::DefaultDeferrable.new
       end
 
-      def unsubscribe(channel, message_callback)
-        listener.unsubscribe_to(channel, message_callback)
+      def unsubscribe(channel, callback)
+        listener.unsubscribe_to(channel, callback)
       end
 
-
-      def with_connection # :nodoc:
+      def with_connection(&block) # :nodoc:
         ActiveRecord::Base.connection_pool.with_connection do |ar_conn|
           pg_conn = ar_conn.raw_connection
 
@@ -38,9 +39,10 @@ module ActionCable
       end
 
       class Listener
+        #attr_accessor :subscribers
+
         def initialize(adapter)
           @adapter = adapter
-
           @subscribers = Hash.new {|h,k| h[k] = [] }
           @sync = Mutex.new
           @queue = Queue.new
@@ -52,8 +54,7 @@ module ActionCable
         end
 
         def listen
-          adapter.with_connection do |pg_conn|
-
+          @adapter.with_connection do |pg_conn|
             loop do
               until @queue.empty?
                 value = @queue.pop(true)
