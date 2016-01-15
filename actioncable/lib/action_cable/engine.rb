@@ -28,8 +28,8 @@ module ActionCable
 
       ActiveSupport.on_load(:action_cable) do
         if (config_path = Pathname.new(app.config.paths["config/cable"].first)).exist?
-          # TODO: remove this comment -- anyway, self is an instance of ActionCable::Server::Configuration
-          self.config_opts = Rails.application.config_for(config_path).with_indifferent_access
+          # self is an instance of ActionCable::Server::Configuration
+          self.cable = Rails.application.config_for(config_path).with_indifferent_access
         end
 
         options.each { |k,v| send("#{k}=", v) }
