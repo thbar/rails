@@ -81,6 +81,8 @@ notifications:
   irc:
     on_success: change
     on_failure: always
+    skip_join: false
+    use_notice: false
     channels:
       - "irc.freenode.org#rails-contrib"
   campfire:
