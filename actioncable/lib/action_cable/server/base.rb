@@ -41,6 +41,13 @@ module ActionCable
 
           @worker_pool = nil
         end
+
+        @mutex.synchronize do
+          if @pubsub
+            pubsub.shutdown
+            @pubsub = nil
+          end
+        end
       end
 
       # Gateway to RemoteConnections. See that class for details.
