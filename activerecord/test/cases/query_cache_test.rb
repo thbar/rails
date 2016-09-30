@@ -30,38 +30,99 @@ class QueryCacheTest < ActiveRecord::TestCase
     assert !ActiveRecord::Base.connection.query_cache_enabled, "cache off"
   end
 
-  def test_exceptional_middleware_cleans_up_correct_cache
-    connection = ActiveRecord::Base.connection
-    called = false
+  def test_query_cache_across_threads
+    assert ActiveRecord::Base.connection_pool.connections.none?(&:query_cache_enabled), "all caches off"
+    assert ActiveRecord::Base.connection_pool.connections.map(&:query_cache).all?(&:empty?), "all caches empty"
 
-    mw = middleware { |env|
-      Task.find 1
-      Task.find 1
-      assert_equal 1, connection.query_cache.length
+    thread_1_connection = nil
+    thread_2_connection = nil
 
-      # Checkin connection early
-      ActiveRecord::Base.clear_active_connections!
-      # Make sure ActiveRecord::Base.connection doesn't checkout the same connection
-      ActiveRecord::Base.connection_pool.remove(connection)
+    thread_1 = Thread.new {
+      thread_1_connection = ActiveRecord::Base.connection
+      sleep
 
-      called = true
+      mw = middleware { |env|
+        sleep
+        Task.find 1
+        sleep
+        ActiveRecord::Base.clear_active_connections!
+        sleep
+        thread_1_connection = ActiveRecord::Base.connection
+      }
+      mw.call({})
     }
-    mw.call({})
 
-    assert called
-    assert_equal 0, connection.query_cache.length
-    assert !connection.query_cache_enabled, "cache off"
-  end
+    sleep 0.1 while thread_1.status == "run"
+    assert_equal thread_1.status, "sleep"
+    assert !thread_1_connection.nil?
+    assert !thread_1_connection.query_cache_enabled, "cache off"
+    assert thread_1_connection.query_cache.empty?, "cache empty"
 
-  def test_exceptional_middleware_leaves_enabled_cache_alone
-    ActiveRecord::Base.connection.enable_query_cache!
+    thread_1.wakeup
+    sleep 0.1 while thread_1.status == "run"
+    assert_equal thread_1.status, "sleep"
+    assert thread_1_connection.query_cache_enabled, "cache on"
+    assert thread_1_connection.query_cache.empty?, "cache empty"
 
-    mw = middleware { |env|
-      raise "lol borked"
+    thread_1.wakeup
+    sleep 0.1 while thread_1.status == "run"
+    assert_equal thread_1.status, "sleep"
+    assert thread_1_connection.query_cache_enabled, "cache on"
+    assert !thread_1_connection.query_cache.empty?, "cache dirty"
+
+    thread_1.wakeup
+    sleep 0.1 while thread_1.status == "run"
+    assert_equal thread_1.status, "sleep"
+    assert !thread_1_connection.query_cache_enabled, "cache off"
+    assert thread_1_connection.query_cache.empty?, "cache empty"
+
+    thread_2 = Thread.new {
+      thread_2_connection = ActiveRecord::Base.connection
+      sleep
+      mw = middleware { |env|
+        sleep
+        Task.find 1
+        sleep
+        ActiveRecord::Base.clear_active_connections!
+        sleep
+      }
+      mw.call({})
     }
-    assert_raises(RuntimeError) { mw.call({}) }
 
-    assert ActiveRecord::Base.connection.query_cache_enabled, "cache on"
+    sleep 0.1 while thread_2.status == "run"
+    assert_equal thread_2.status, "sleep"
+    assert_equal thread_2_connection, thread_1_connection
+    assert !thread_2_connection.query_cache_enabled, "cache off"
+    assert thread_2_connection.query_cache.empty?, "cache empty"
+
+    thread_2.wakeup
+    sleep 0.1 while thread_2.status == "run"
+    assert_equal thread_2.status, "sleep"
+    assert thread_2_connection.query_cache_enabled, "cache on"
+    assert thread_2_connection.query_cache.empty?, "cache empty"
+
+    thread_2.wakeup
+    sleep 0.1 while thread_2.status == "run"
+    assert_equal thread_2.status, "sleep"
+    assert !thread_2_connection.query_cache.empty?, "cache dirty"
+
+    thread_1.wakeup
+    thread_1.join
+    assert_not_equal thread_1_connection, thread_2_connection
+    assert thread_2_connection.query_cache_enabled, "cache on"
+    assert !thread_2_connection.query_cache.empty?, "cache dirty"
+
+    thread_2.wakeup
+    sleep 0.1 while thread_2.status == "run"
+    assert_equal thread_2.status, "sleep"
+
+    thread_2.wakeup
+    thread_2.join
+    assert !thread_2_connection.query_cache_enabled, "cache off"
+    assert thread_2_connection.query_cache.empty?, "cache empty"
+
+    assert ActiveRecord::Base.connection_pool.connections.none?(&:query_cache_enabled), "all caches off"
+    assert ActiveRecord::Base.connection_pool.connections.map(&:query_cache).all?(&:empty?), "all caches empty"
   end
 
   def test_middleware_delegates

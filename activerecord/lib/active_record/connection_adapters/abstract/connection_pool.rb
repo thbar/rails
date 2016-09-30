@@ -520,6 +520,9 @@ module ActiveRecord
             conn.expire
           end
 
+          conn.disable_query_cache!
+          conn.clear_query_cache
+
           @available.add conn
         end
       end
