@@ -28,12 +28,12 @@ module ActiveRecord
       enabled       = connection.query_cache_enabled
       connection.enable_query_cache!
 
-      enabled
+      [connection, enabled]
     end
 
-    def self.complete(enabled)
-      ActiveRecord::Base.connection.clear_query_cache
-      ActiveRecord::Base.connection.disable_query_cache! unless enabled
+    def self.complete((connection, enabled))
+      connection.clear_query_cache
+      connection.disable_query_cache! unless enabled
     end
 
     def self.install_executor_hooks(executor = ActiveSupport::Executor)
