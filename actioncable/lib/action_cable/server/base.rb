@@ -36,18 +36,14 @@ module ActionCable
       def restart
         connections.each(&:close)
 
+        worker_pool = pubsub = nil
         @mutex.synchronize do
-          worker_pool.halt if @worker_pool
-
-          @worker_pool = nil
+          worker_pool, @worker_pool = @worker_pool, nil
+          pubsub, @pubsub = @pubsub, nil
         end
 
-        @mutex.synchronize do
-          if @pubsub
-            pubsub.shutdown
-            @pubsub = nil
-          end
-        end
+        worker_pool.halt if worker_pool
+        pubsub.shutdown if pubsub
       end
 
       # Gateway to RemoteConnections. See that class for details.
