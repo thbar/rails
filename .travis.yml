@@ -33,17 +33,7 @@ script: 'ci/travis.rb'
 
 env:
   matrix:
-    - "GEM=railties"
-    - "GEM=ap"
     - "GEM=ac TESTOPTS=-vs26"
-    - "GEM=ac:integration"
-    - "GEM=am,amo,as,av,aj"
-    - "GEM=as PRESERVE_TIMEZONES=1"
-    - "GEM=ar:mysql2"
-    - "GEM=ar:sqlite3"
-    - "GEM=ar:postgresql"
-    - "GEM=aj:integration"
-    - "GEM=guides"
 
 rvm:
   - 2.2.5

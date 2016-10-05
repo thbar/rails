@@ -32,7 +32,7 @@ WebSocket::Client::Simple::Client.prepend Module.new {
 ####
 
 class ClientTest < ActionCable::TestCase
-  WAIT_WHEN_EXPECTING_EVENT = 2
+  WAIT_WHEN_EXPECTING_EVENT = 60
   WAIT_WHEN_NOT_EXPECTING_EVENT = 0.5
 
   class EchoChannel < ActionCable::Channel::Base
