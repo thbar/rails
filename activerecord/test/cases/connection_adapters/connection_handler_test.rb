@@ -5,15 +5,16 @@ module ActiveRecord
     class ConnectionHandlerTest < ActiveRecord::TestCase
       def setup
         @handler = ConnectionHandler.new
+        resolver = ConnectionAdapters::ConnectionSpecification::Resolver.new Base.configurations
         @spec_name = "primary"
-        @pool = @handler.establish_connection(ActiveRecord::Base.configurations["arunit"])
+        @pool = @handler.establish_connection(resolver.spec(:arunit, @spec_name))
       end
 
       def test_establish_connection_uses_spec_name
         config = { "readonly" => { "adapter" => "sqlite3" } }
         resolver = ConnectionAdapters::ConnectionSpecification::Resolver.new(config)
         spec =   resolver.spec(:readonly)
-        @handler.establish_connection(spec.to_hash)
+        @handler.establish_connection(spec)
 
         assert_not_nil @handler.retrieve_connection_pool("readonly")
       ensure

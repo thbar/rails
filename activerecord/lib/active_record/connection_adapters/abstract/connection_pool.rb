@@ -863,26 +863,8 @@ module ActiveRecord
       end
       alias :connection_pools :connection_pool_list
 
-      def establish_connection(config)
-        resolver = ConnectionSpecification::Resolver.new(Base.configurations)
-        spec = resolver.spec(config)
-
-        remove_connection(spec.name)
-
-        message_bus = ActiveSupport::Notifications.instrumenter
-        payload = {
-          connection_id: object_id
-        }
-        if spec
-          payload[:spec_name] = spec.name
-          payload[:config] = spec.config
-        end
-
-        message_bus.instrument("!connection.active_record", payload) do
-          owner_to_pool[spec.name] = ConnectionAdapters::ConnectionPool.new(spec)
-        end
-
-        owner_to_pool[spec.name]
+      def establish_connection(spec)
+        owner_to_pool[spec.name] = ConnectionAdapters::ConnectionPool.new(spec)
       end
 
       # Returns true if there are any active connections among the connection
@@ -951,7 +933,7 @@ module ActiveRecord
             # A connection was established in an ancestor process that must have
             # subsequently forked. We can't reuse the connection, but we can copy
             # the specification and establish a new connection with it.
-            establish_connection(ancestor_pool.spec.to_hash).tap do |pool|
+            establish_connection(ancestor_pool.spec).tap do |pool|
               pool.schema_cache = ancestor_pool.schema_cache if ancestor_pool.schema_cache
             end
           else

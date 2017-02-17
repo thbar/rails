@@ -344,19 +344,6 @@ module ActiveRecord
       class ConnectionTestModel < ActiveRecord::Base
       end
 
-      def test_connection_notification_is_called
-        payloads = []
-        subscription = ActiveSupport::Notifications.subscribe("!connection.active_record") do |name, started, finished, unique_id, payload|
-          payloads << payload
-        end
-        ConnectionTestModel.establish_connection :arunit
-
-        assert_equal [:config, :connection_id, :spec_name], payloads[0].keys.sort
-        assert_equal "ActiveRecord::ConnectionAdapters::ConnectionPoolTest::ConnectionTestModel", payloads[0][:spec_name]
-      ensure
-        ActiveSupport::Notifications.unsubscribe(subscription) if subscription
-      end
-
       def test_pool_sets_connection_schema_cache
         connection = pool.checkout
         schema_cache = SchemaCache.new connection
